@@ -1,5 +1,8 @@
-﻿using ChatWebAPI.Models;
+﻿using AutoMapper;
+using ChatWebAPI.Entities;
+using ChatWebAPI.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,10 +14,29 @@ namespace ChatWebAPI.Controllers
     [Route("api/[controller]")]
     public class ChatController : ControllerBase
     {
-        [HttpPost("Create")]
-        public ActionResult<CreatedChatResponse> CreateChat(CreateChatRequest newChat)
+        private readonly ApplicationDBContext context;
+        private readonly IMapper mapper;
+
+        public ChatController(ApplicationDBContext context, IMapper mapper)
         {
-            return new CreatedChatResponse() { Id = 1, CreationDate = DateTime.Now, Name = newChat.Name };
+            this.context = context;
+            this.mapper = mapper;
+        }
+
+        [HttpPost("Create")]
+        public async Task<ActionResult<CreatedChatResponse>> CreateChat([FromBody] CreateChatRequest newChat)
+        {
+            var exists = await context.Chats.AnyAsync(chat => chat.Name == newChat.Name);
+            if (exists)
+            {
+                return BadRequest($"Chat already created {newChat.Name}");
+            }
+
+            var chat = mapper.Map<Chat>(newChat);
+            chat.CreationDate = DateTime.Now;
+            context.Add(chat);
+            await context.SaveChangesAsync();
+            return mapper.Map<CreatedChatResponse>(chat);
         }
 
         [HttpGet("Join/{chatId:int}/{userId:int}")]
@@ -23,34 +45,50 @@ namespace ChatWebAPI.Controllers
             return Ok();
         }
 
-        [HttpGet("Close/{chatId:int}")]
-        public ActionResult CloseChat(int chatId)
+        [HttpDelete("Close/{chatId:int}")]
+        public async Task<ActionResult<CreatedChatResponse>> CloseChat(int chatId)
         {
+            var exists = await context.Chats.AnyAsync(chat => chat.Id == chatId);
+
+            if (!exists)
+            {
+                return NotFound();
+            }
+
+            context.Remove(new Chat() { Id = chatId });
+            await context.SaveChangesAsync();
             return Ok();
         }
 
         [HttpGet("List/Chats")]
-        public ActionResult<List<CreatedChatResponse>> GetChats()
+        public async Task<ActionResult<List<CreatedChatResponse>>> GetChats()
         {
-            return new List<CreatedChatResponse>();
+            var chats = await context.Chats.ToListAsync();
+            return mapper.Map<List<CreatedChatResponse>>(chats);
         }
 
-        [HttpGet("List/Messages/{chatId:int}")]
-        public ActionResult<List<string>> GetMessage(int chatId)
+        [HttpGet("ListLast/{amount:int}/Messages/{chatId:int}")]
+        public async Task<ActionResult<List<SavedMessage>>> GetLastMessage(int amount, int chatId)
         {
-            return new List<string>();
+            var messages = await context.Messages.Where(message => message.ChatId == chatId).ToListAsync();
+            return mapper.Map<List<SavedMessage>>(messages.TakeLast(amount > 50 ? 50 : amount));
         }
 
         [HttpPost("Send/Message")]
-        public ActionResult SendMessage(string message)
+        public async Task<ActionResult<SavedMessage>> SendMessage([FromBody] MessageRequest messageRequest)
         {
-            return Ok();
+            var message = mapper.Map<Message>(messageRequest);
+            message.TimeStamp = DateTime.Now;
+            context.Add(message);
+            await context.SaveChangesAsync();
+            return mapper.Map<SavedMessage>(message);
         }
 
-        [HttpGet("Read/Message/{chatId:int}")]
-        public ActionResult<List<string>> ReceiveMessage(int chatId)
+        [HttpGet("Read/Message/{chatId:int}/{lastMessageId:int}")]
+        public async Task<ActionResult<List<SavedMessage>>> ReceiveMessage(int chatId, int lastMessageId)
         {
-            return new List<string>();
+            var messages = await context.Messages.Where(message => message.ChatId == chatId && message.Id > lastMessageId).ToListAsync();
+            return mapper.Map<List<SavedMessage>>(messages);
         }
     }
 }
