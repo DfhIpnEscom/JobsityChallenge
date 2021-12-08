@@ -5,7 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ChatWebAPI.Controllers
@@ -77,6 +81,23 @@ namespace ChatWebAPI.Controllers
         [HttpPost("Send/Message")]
         public async Task<ActionResult<SavedMessage>> SendMessage([FromBody] MessageRequest messageRequest)
         {
+            Regex pattern = new Regex(@"^/stock=(?<stock_code>[A-Z]*.?[A-Z]*)$");
+            Match stockCode = pattern.Match(messageRequest.Content);
+            if (stockCode.Success)
+            {
+                var code = stockCode.Groups["stock_code"].Value;
+
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create($"https://stooq.com/q/l/?s={code}&f=sd2t2ohlcv&h&e=csv");
+                HttpWebResponse resp = (HttpWebResponse)req.GetResponse();
+
+                StreamReader sr = new StreamReader(resp.GetResponseStream());
+                string results = sr.ReadToEnd();
+                string closeValue = string.Empty;
+                if (results.Contains("\n"))
+                    closeValue = results.Split('\n')[1].Split(',')[6];
+                sr.Close();
+                return new SavedMessage() { Content = $"{code} quote is ${closeValue} per share", TimeStamp = DateTime.Now };
+            }
             var message = mapper.Map<Message>(messageRequest);
             message.TimeStamp = DateTime.Now;
             context.Add(message);
