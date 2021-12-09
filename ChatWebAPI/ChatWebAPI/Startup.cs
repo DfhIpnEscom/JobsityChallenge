@@ -1,3 +1,5 @@
+using ChatWebAPI.Services;
+using ChatWebAPI.Services.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -41,6 +43,8 @@ namespace ChatWebAPI
             });
 
             services.AddAutoMapper(typeof(Startup));
+
+            services.AddScoped<IBotService, BotService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ChatWebAPI.Entities;
 using ChatWebAPI.Models;
+using ChatWebAPI.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -20,11 +21,13 @@ namespace ChatWebAPI.Controllers
     {
         private readonly ApplicationDBContext context;
         private readonly IMapper mapper;
+        private readonly IBotService botService;
 
-        public ChatController(ApplicationDBContext context, IMapper mapper)
+        public ChatController(ApplicationDBContext context, IMapper mapper, IBotService botService)
         {
             this.context = context;
             this.mapper = mapper;
+            this.botService = botService;
         }
 
         [HttpPost("Create")]
@@ -44,8 +47,17 @@ namespace ChatWebAPI.Controllers
         }
 
         [HttpGet("Join/{chatId:int}/{userId:int}")]
-        public ActionResult JoinChat(int chatId, int userId)
+        public async Task<ActionResult> JoinChat(int chatId, int userId)
         {
+            var chatExists = await context.Chats.AnyAsync(chat => chat.Id == chatId);
+
+            if (!chatExists)
+            {
+                return NotFound("Invalid chat");
+            }
+
+            context.Add(new ChatUser() { ChatId = chatId, UserId = userId });
+            await context.SaveChangesAsync();
             return Ok();
         }
 
@@ -59,7 +71,23 @@ namespace ChatWebAPI.Controllers
                 return NotFound();
             }
 
-            context.Remove(new Chat() { Id = chatId });
+            var chatUserExists = await context.ChatsUsers.AnyAsync(chatUser => chatUser.ChatId == chatId);
+
+            if (chatUserExists)
+            {
+                var delete = context.ChatsUsers.Where(chatUser => chatUser.ChatId == chatId);
+                context.ChatsUsers.RemoveRange(delete);
+            }
+
+            var messageExists = await context.Messages.AnyAsync(message => message.ChatId == chatId);
+
+            if (messageExists)
+            {
+                var delete = context.Messages.Where(message => message.ChatId == chatId);
+                context.Messages.RemoveRange(delete);
+            }
+
+            context.Chats.Remove(new Chat() { Id = chatId });
             await context.SaveChangesAsync();
             return Ok();
         }
@@ -81,33 +109,42 @@ namespace ChatWebAPI.Controllers
         [HttpPost("Send/Message")]
         public async Task<ActionResult<SavedMessage>> SendMessage([FromBody] MessageRequest messageRequest)
         {
+            var message = mapper.Map<Message>(messageRequest);
+            
+            var chatExists = await context.ChatsUsers.AnyAsync(chatUser => chatUser.ChatId == message.ChatId && chatUser.UserId == message.UserId);
+
+            if (!chatExists)
+            {
+                return NotFound("Invalid chat or user");
+            }
+
             Regex pattern = new Regex(@"^/stock=(?<stock_code>[A-Z]*.?[A-Z]*)$");
-            Match stockCode = pattern.Match(messageRequest.Content);
+            Match stockCode = pattern.Match(message.Content);
             if (stockCode.Success)
             {
                 var code = stockCode.Groups["stock_code"].Value;
 
-                HttpWebRequest req = (HttpWebRequest)WebRequest.Create($"https://stooq.com/q/l/?s={code}&f=sd2t2ohlcv&h&e=csv");
-                HttpWebResponse resp = (HttpWebResponse)req.GetResponse();
-
-                StreamReader sr = new StreamReader(resp.GetResponseStream());
-                string results = sr.ReadToEnd();
-                string closeValue = string.Empty;
-                if (results.Contains("\n"))
-                    closeValue = results.Split('\n')[1].Split(',')[6];
-                sr.Close();
+                var closeValue = await botService.GetCloseValue(code);
+               
                 return new SavedMessage() { Content = $"{code} quote is ${closeValue} per share", TimeStamp = DateTime.Now };
             }
-            var message = mapper.Map<Message>(messageRequest);
+            
             message.TimeStamp = DateTime.Now;
             context.Add(message);
             await context.SaveChangesAsync();
             return mapper.Map<SavedMessage>(message);
         }
 
-        [HttpGet("Read/Message/{chatId:int}/{lastMessageId:int}")]
-        public async Task<ActionResult<List<SavedMessage>>> ReceiveMessage(int chatId, int lastMessageId)
+        [HttpGet("Read/Message/{chatId:int}/{userId:int}/{lastMessageId:int}")]
+        public async Task<ActionResult<List<SavedMessage>>> ReceiveMessage(int chatId, int userId, int lastMessageId)
         {
+            var chatExists = await context.ChatsUsers.AnyAsync(chatUser => chatUser.ChatId == chatId && chatUser.UserId == userId);
+
+            if (!chatExists)
+            {
+                return NotFound("Invalid chat or user");
+            }
+
             var messages = await context.Messages.Where(message => message.ChatId == chatId && message.Id > lastMessageId).ToListAsync();
             return mapper.Map<List<SavedMessage>>(messages);
         }
