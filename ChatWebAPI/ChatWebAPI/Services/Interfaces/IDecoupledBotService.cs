@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace ChatWebAPI.Services.Interfaces
 {
-    public interface IBotService
+    public interface IDecoupledBotService
     {
         Task<string> GetCloseValue(string stockCode);
     }

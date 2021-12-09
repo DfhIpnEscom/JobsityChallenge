@@ -21,9 +21,9 @@ namespace ChatWebAPI.Controllers
     {
         private readonly ApplicationDBContext context;
         private readonly IMapper mapper;
-        private readonly IBotService botService;
+        private readonly IDecoupledBotService botService;
 
-        public ChatController(ApplicationDBContext context, IMapper mapper, IBotService botService)
+        public ChatController(ApplicationDBContext context, IMapper mapper, IDecoupledBotService botService)
         {
             this.context = context;
             this.mapper = mapper;

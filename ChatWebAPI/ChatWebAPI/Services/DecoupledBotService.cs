@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace ChatWebAPI.Services
 {
-    public class BotService : IBotService
+    public class DecoupledBotService : IDecoupledBotService
     {
         public async Task<string> GetCloseValue(string stockCode)
         {

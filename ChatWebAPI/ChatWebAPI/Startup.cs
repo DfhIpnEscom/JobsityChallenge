@@ -44,7 +44,7 @@ namespace ChatWebAPI
 
             services.AddAutoMapper(typeof(Startup));
 
-            services.AddScoped<IBotService, BotService>();
+            services.AddScoped<IDecoupledBotService, DecoupledBotService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
