@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script>
+$(document).ready(function(){
+	var activeChats = [];
+	$("#chatsRequest").click(function(){
+		$.get("https://localhost:44313/api/Chat/List/Chats", function(data, status){
+			//alert("Data: " + data.length + "\nStatus: " + status);
+			var chats = [];
+			$('#chats').empty();
+			for(var i=0; i<data.length; i++)
+			{
+				//chats.push('<li id="chatId_'+ data[i].id+'"><button>'+data[i].name+'  '+data[i].creationDate+'</button></li>');
+				const search = (chat) => chat.id == data[i].id;
+				var action = activeChats.some(search) ? 'READ MESSAGE' : 'JOIN';
+				chats.push('<li id="chatId_'+ data[i].id+'"><button>'+data[i].name+'  '+action+'</button></li>');
+			}
+			$("#chats").append(chats.join(''));
+
+			$('#chats li').click(function(e){
+				//alert(e.currentTarget.id.split('_')[1]);
+				const search = (chat) => chat.id == chatId;
+				var chatId = e.currentTarget.id.split('_')[1];
+				if(activeChats.some(search))
+				{
+					var chatItem = activeChats.find(search);
+					$("textarea").val(chatItem.messages.join('\n'));
+					return;	
+				}
+				joinChat(chatId, 1);
+				activeChats.push({id:chatId, messages:[]});
+			});
+		});
+	});
+
+	function joinChat(chatId, userId){
+		$.get("https://localhost:44313/api/Chat/Join/"+chatId+"/"+userId, function(data, status){
+			alert(status);
+		});
+	};
+});
+</script>
+</head>
+<body>
+
+<button id="chatsRequest">Get Chat List</button>
+<ul id="chats">
+</ul>  
+<label>Current Chat:[Chat name]</label>
+<label>Message:</label>
+<input type="text" name="message">
+<br/>
+<br/>
+<textarea id="messages" rows="30" cols="100">
+
+</textarea>
+</body>
+</html>

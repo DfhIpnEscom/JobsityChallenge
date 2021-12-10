@@ -31,7 +31,7 @@ namespace ChatWebAPI
         {
 
             services.AddControllers();
-
+            services.AddCors();
             services.AddDbContext<ApplicationDBContext>(options =>
             {
                 options.UseSqlServer(Configuration.GetConnectionString("defaultConnection"));
@@ -56,6 +56,10 @@ namespace ChatWebAPI
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "ChatWebAPI v1"));
             }
+
+            app.UseCors(
+                options => options.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()
+            );
 
             app.UseHttpsRedirection();
 
